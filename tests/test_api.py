@@ -248,3 +248,34 @@ def test_get_commits_by_depth_missing_url():
     )
     
     assert response.status_code == 422
+
+def test_cors_preflight():
+    """测试 CORS 预检请求"""
+    response = client.options(
+        "/commits/",
+        headers={
+            "Origin": "http://example.com",
+            "Access-Control-Request-Method": "GET",
+            "Access-Control-Request-Headers": "Content-Type",
+        }
+    )
+    
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "*"
+    assert "GET" in response.headers["access-control-allow-methods"]
+    assert "Content-Type" in response.headers["access-control-allow-headers"]
+
+def test_cors_actual_request():
+    """测试带有 CORS 头的实际请求"""
+    response = client.get(
+        "/commits/",
+        headers={"Origin": "http://example.com"},
+        params={
+            "repo_url": TEST_REPO,
+            "start_ref": VALID_TAGS[0],
+            "end_ref": VALID_TAGS[1]
+        }
+    )
+    
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "*"
