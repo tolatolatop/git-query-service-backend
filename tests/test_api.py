@@ -4,6 +4,7 @@ from git_query.api import app
 import json
 from typing import List, Dict
 from unittest.mock import patch, MagicMock
+from datetime import datetime
 
 client = TestClient(app)
 
@@ -19,7 +20,7 @@ MOCK_COMMITS = [
         "id": "commit1",
         "message": "First commit",
         "author": "Test Author",
-        "time": 1234567890,
+        "time": int(datetime.now().timestamp()),
         "parents": [],
         "depth": 0
     },
@@ -27,7 +28,7 @@ MOCK_COMMITS = [
         "id": "commit2",
         "message": "Second commit",
         "author": "Test Author",
-        "time": 1234567891,
+        "time": int(datetime.now().timestamp()),
         "parents": ["commit1"],
         "depth": 1
     }
@@ -170,10 +171,10 @@ def test_get_commits_by_depth_success():
         
         assert response.status_code == 200
         data = response.json()
-        assert "commits" in data
-        assert len(data["commits"]) == 2
-        assert data["commits"][0]["id"] == "commit1"
-        assert data["commits"][1]["id"] == "commit2"
+        assert "id" in data[0]
+        assert len(data) == 2
+        assert data[0]["id"] == "commit1"
+        assert data[1]["id"] == "commit2"
 
 def test_get_commits_by_depth_unlimited():
     """测试不限制深度获取提交"""
@@ -189,8 +190,7 @@ def test_get_commits_by_depth_unlimited():
         
         assert response.status_code == 200
         data = response.json()
-        assert "commits" in data
-        assert len(data["commits"]) == 2
+        assert len(data) == 2
 
 def test_get_commits_by_depth_invalid_ref():
     """测试使用无效的引用"""
