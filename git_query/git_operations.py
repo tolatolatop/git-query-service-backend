@@ -7,12 +7,17 @@ import os
 from pathlib import Path
 
 class GitOperations:
-    def __init__(self):
+    def __init__(self, token: Optional[str] = None):
+        """
+        初始化Git操作类
+        
+        :param token: Git认证token，如果不提供则尝试从GIT_TOKEN环境变量获取
+        """
         # 创建临时目录
         self.temp_dir = tempfile.mkdtemp(prefix='git_query_')
         self.repo_path = Path(self.temp_dir) / 'repo'
         # 获取 Git Token
-        self.git_token = os.getenv('GIT_TOKEN')
+        self.git_token = token or os.getenv('GIT_TOKEN')
 
     def __del__(self):
         """清理临时目录"""

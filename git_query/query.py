@@ -1,6 +1,6 @@
 from typing import List, Dict, Union, Optional
 from .db import GitDatabase
-from .git_operations import GitOperations
+from .factory import GitOperationsFactory
 import os
 
 class GitQueryService:
@@ -10,7 +10,6 @@ class GitQueryService:
             user=os.getenv('NEO4J_USER'),
             password=os.getenv('NEO4J_PASSWORD')
         )
-        self.git_ops = GitOperations()
 
     def get_commits_between(
         self,
@@ -23,10 +22,13 @@ class GitQueryService:
         优先从数据库查询，如果数据不存在则从git仓库获取并同步到数据库
         """
         try:
+            # 使用工厂创建git操作实例
+            git_ops = GitOperationsFactory.create(repo_url)
+            
             # 先从git获取引用对应的commit id
-            repo = self.git_ops._clone_repository(repo_url)
-            start_commit = self.git_ops._get_commit_object(repo, start_ref)
-            end_commit = self.git_ops._get_commit_object(repo, end_ref)
+            repo = git_ops._clone_repository(repo_url)
+            start_commit = git_ops._get_commit_object(repo, start_ref)
+            end_commit = git_ops._get_commit_object(repo, end_ref)
             
             # 尝试从数据库获取
             commits = self.db.get_commits_between(
@@ -39,7 +41,7 @@ class GitQueryService:
                 return commits
                 
             # 数据库中不存在，从git获取
-            commits = self.git_ops.get_commits_between(
+            commits = git_ops.get_commits_between(
                 repo_url,
                 start_ref,
                 end_ref
@@ -51,7 +53,7 @@ class GitQueryService:
             
         except Exception as e:
             # 如果数据库查询失败，直接从git获取
-            return self.git_ops.get_commits_between(
+            return git_ops.get_commits_between(
                 repo_url,
                 start_ref,
                 end_ref
@@ -68,9 +70,12 @@ class GitQueryService:
         优先从数据库查询，如果数据不存在则从git仓库获取并同步到数据库
         """
         try:
+            # 使用工厂创建git操作实例
+            git_ops = GitOperationsFactory.create(repo_url)
+            
             # 先从git获取引用对应的commit id
-            repo = self.git_ops._clone_repository(repo_url)
-            start_commit = self.git_ops._get_commit_object(repo, start_ref)
+            repo = git_ops._clone_repository(repo_url)
+            start_commit = git_ops._get_commit_object(repo, start_ref)
             
             # 尝试从数据库获取
             commits = self.db.get_commits_by_depth(
@@ -83,7 +88,7 @@ class GitQueryService:
                 return commits
                 
             # 数据库中不存在，从git获取
-            commits = self.git_ops.get_commits_by_depth(
+            commits = git_ops.get_commits_by_depth(
                 repo_url,
                 start_ref,
                 max_depth
@@ -95,7 +100,7 @@ class GitQueryService:
             
         except Exception as e:
             # 如果数据库查询失败，直接从git获取
-            return self.git_ops.get_commits_by_depth(
+            return git_ops.get_commits_by_depth(
                 repo_url,
                 start_ref,
                 max_depth
