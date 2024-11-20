@@ -124,3 +124,55 @@ class GitOperations:
             raise ValueError("在遍历过程中未找到目标提交")
 
         return commits 
+
+    def get_commits_by_depth(
+        self,
+        remote_url: str,
+        start_ref: str,
+        max_depth: int = -1
+    ) -> List[Dict[str, Union[str, int, List[str]]]]:
+        """
+        获取指定引用向前追溯指定深度的所有提交
+
+        :param remote_url: 远程仓库地址
+        :param start_ref: 起始引用（分支名、tag名或commit id）
+        :param max_depth: 最大深度，-1表示不限制深度
+        :return: 包含提交信息的列表
+        """
+        repo = self._clone_repository(remote_url)
+        
+        # 获取起始commit对象
+        start_commit = self._get_commit_object(repo, start_ref)
+
+        # 使用广度优先搜索获取所有提交
+        commits = []
+        visited = set()
+        queue = [(start_commit, 0)]  # (commit, depth)
+
+        while queue:
+            commit, depth = queue.pop(0)
+            
+            # 如果设置了最大深度且当前深度超过最大深度，跳过
+            if max_depth != -1 and depth > max_depth:
+                continue
+                
+            if commit.id in visited:
+                continue
+
+            visited.add(commit.id)
+            
+            # 添加提交信息
+            commits.append({
+                "id": str(commit.id),
+                "message": commit.message,
+                "author": commit.author.name,
+                "time": commit.commit_time,
+                "parents": [str(parent.id) for parent in commit.parents],
+                "depth": depth
+            })
+
+            # 将父提交添加到队列
+            for parent in commit.parents:
+                queue.append((parent, depth + 1))
+
+        return commits 

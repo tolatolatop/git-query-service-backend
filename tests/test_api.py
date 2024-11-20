@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 from git_query.api import app
 import json
 from typing import List, Dict
+from unittest.mock import patch, MagicMock
 
 client = TestClient(app)
 
@@ -11,6 +12,26 @@ TEST_REPO = "https://github.com/libgit2/pygit2.git"
 VALID_TAGS = ["v1.4.0", "v1.3.0"]
 INVALID_TAG = "v999.999.0"
 VALID_COMMIT = "57b03b8d4a1f8b214f6ce5f0f6dfd35918b46399"
+
+# 模拟提交数据
+MOCK_COMMITS = [
+    {
+        "id": "commit1",
+        "message": "First commit",
+        "author": "Test Author",
+        "time": 1234567890,
+        "parents": [],
+        "depth": 0
+    },
+    {
+        "id": "commit2",
+        "message": "Second commit",
+        "author": "Test Author",
+        "time": 1234567891,
+        "parents": ["commit1"],
+        "depth": 1
+    }
+]
 
 def test_get_commits_between_valid_tags():
     """测试使用有效的tag获取提交信息"""
@@ -134,3 +155,96 @@ def test_missing_parameters(params):
     """测试缺少必要参数的情况"""
     response = client.get("/commits/", params=params)
     assert response.status_code == 422  # FastAPI的参数验证错误码 
+
+def test_get_commits_by_depth_success():
+    """测试成功获取指定深度的提交"""
+    with patch('git_query.git_operations.GitOperations.get_commits_by_depth', return_value=MOCK_COMMITS):
+        response = client.post(
+            "/commits/by-depth",
+            json={
+                "remote_url": "https://github.com/test/repo.git",
+                "start_ref": "main",
+                "max_depth": 2
+            }
+        )
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert "commits" in data
+        assert len(data["commits"]) == 2
+        assert data["commits"][0]["id"] == "commit1"
+        assert data["commits"][1]["id"] == "commit2"
+
+def test_get_commits_by_depth_unlimited():
+    """测试不限制深度获取提交"""
+    with patch('git_query.git_operations.GitOperations.get_commits_by_depth', return_value=MOCK_COMMITS):
+        response = client.post(
+            "/commits/by-depth",
+            json={
+                "remote_url": "https://github.com/test/repo.git",
+                "start_ref": "main",
+                "max_depth": -1
+            }
+        )
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert "commits" in data
+        assert len(data["commits"]) == 2
+
+def test_get_commits_by_depth_invalid_ref():
+    """测试使用无效的引用"""
+    with patch('git_query.git_operations.GitOperations.get_commits_by_depth', 
+              side_effect=ValueError("Invalid reference")):
+        response = client.post(
+            "/commits/by-depth",
+            json={
+                "remote_url": "https://github.com/test/repo.git",
+                "start_ref": "invalid_ref",
+                "max_depth": 1
+            }
+        )
+        
+        assert response.status_code == 400
+        assert "Invalid reference" in response.json()["detail"]
+
+def test_get_commits_by_depth_server_error():
+    """测试服务器错误情况"""
+    with patch('git_query.git_operations.GitOperations.get_commits_by_depth', 
+              side_effect=Exception("Server error")):
+        response = client.post(
+            "/commits/by-depth",
+            json={
+                "remote_url": "https://github.com/test/repo.git",
+                "start_ref": "main",
+                "max_depth": 1
+            }
+        )
+        
+        assert response.status_code == 500
+        assert "Server error" in response.json()["detail"]
+
+def test_get_commits_by_depth_invalid_depth():
+    """测试无效的深度值"""
+    response = client.post(
+        "/commits/by-depth",
+        json={
+            "remote_url": "https://github.com/test/repo.git",
+            "start_ref": "main",
+            "max_depth": "invalid"  # 应该是整数
+        }
+    )
+    
+    assert response.status_code == 422  # FastAPI的验证错误状态码
+
+def test_get_commits_by_depth_missing_url():
+    """测试缺少必需的URL参数"""
+    response = client.post(
+        "/commits/by-depth",
+        json={
+            "start_ref": "main",
+            "max_depth": 1
+        }
+    )
+    
+    assert response.status_code == 422

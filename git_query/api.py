@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from typing import List, Dict, Union
+from typing import List, Dict, Union, Optional
 from git_query.git_operations import GitOperations
 import uvicorn
 
@@ -19,6 +19,11 @@ class CommitResponse(BaseModel):
 
 class ErrorResponse(BaseModel):
     error: str
+
+class CommitDepthRequest(BaseModel):
+    remote_url: str
+    start_ref: str
+    max_depth: int = -1
 
 @app.get(
     "/commits/",
@@ -44,6 +49,21 @@ async def get_commits_between(
         return commits
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/commits/by-depth")
+async def get_commits_by_depth(request: CommitDepthRequest):
+    try:
+        git_ops = GitOperations()
+        commits = git_ops.get_commits_by_depth(
+            request.remote_url,
+            request.start_ref,
+            request.max_depth
+        )
+        return {"commits": commits}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True) 
