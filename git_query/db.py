@@ -46,30 +46,39 @@ class GitDatabase:
                 MERGE (r:Repository {url: $repo_url})
             """, repo_url=repo_url)
 
-            # 批量创建Commit节点和关系
+            # 首先创建所有Commit节点
             for commit in commits:
                 session.run("""
-                    MATCH (r:Repository {url: $repo_url})
                     MERGE (c:Commit {id: $commit_id})
                     ON CREATE SET 
                         c.message = $message,
                         c.author = $author,
                         c.time = $time,
                         c.depth = $depth
-                    MERGE (c)-[:BELONGS_TO]->(r)
                     WITH c
-                    UNWIND $parents as parent_id
-                    MERGE (p:Commit {id: parent_id})
-                    MERGE (c)-[:PARENT]->(p)
+                    MATCH (r:Repository {url: $repo_url})
+                    MERGE (c)-[:BELONGS_TO]->(r)
                 """, {
                     'repo_url': repo_url,
                     'commit_id': commit['id'],
                     'message': commit['message'],
                     'author': commit['author'],
                     'time': commit['time'],
-                    'depth': commit['depth'],
-                    'parents': commit['parents']
+                    'depth': commit['depth']
                 })
+
+            # 然后创建所有父子关系
+            for commit in commits:
+                if commit['parents']:
+                    session.run("""
+                        MATCH (c:Commit {id: $commit_id})
+                        UNWIND $parents as parent_id
+                        MATCH (p:Commit {id: parent_id})
+                        MERGE (c)-[:PARENT]->(p)
+                    """, {
+                        'commit_id': commit['id'],
+                        'parents': commit['parents']
+                    })
 
     def get_commits_between(self, repo_url: str, start_commit_id: str, end_commit_id: str) -> List[Dict]:
         """
@@ -106,35 +115,37 @@ class GitDatabase:
 
     def get_commits_by_depth(self, repo_url: str, start_commit_id: str, max_depth: int = -1) -> List[Dict]:
         """
-        获取指定深度的提交
+        获取指定深度的提交，从起始提交（最新）向父提交（更早）遍历
 
         :param repo_url: 仓库URL
-        :param start_commit_id: 起始提交ID
+        :param start_commit_id: 起始提交ID（最新的提交）
         :param max_depth: 最大深度，-1表示不限制
-        :return: 提交信息列表
+        :return: 提交信息列表，按深度排序（从新到旧）
         """
         with self._driver.session() as session:
             query = """
-                MATCH (start:Commit {id: $start_id})-[*0..]->(c:Commit)
-                WHERE c.depth <= $max_depth OR $max_depth = -1
+                MATCH path = (start:Commit {id: $start_id})-[:PARENT*0..]->(c:Commit)
+                WHERE $max_depth = -1 OR length(path) <= $max_depth
                 MATCH (c)-[:BELONGS_TO]->(r:Repository {url: $repo_url})
                 OPTIONAL MATCH (c)-[:PARENT]->(p:Commit)
-                WITH c, COLLECT(p.id) as parents
+                WITH c, length(path) as depth, COLLECT(p.id) as parents
                 RETURN {
                     id: c.id,
                     message: c.message,
                     author: c.author,
                     time: c.time,
-                    depth: c.depth,
+                    depth: depth,
                     parents: parents
                 } as commit_info
-                ORDER BY c.depth
+                ORDER BY depth ASC
             """
             
-            result = session.run(query, 
-                               start_id=start_commit_id, 
-                               max_depth=max_depth,
-                               repo_url=repo_url)
+            result = session.run(
+                query,
+                start_id=start_commit_id,
+                max_depth=max_depth,
+                repo_url=repo_url
+            )
             
             return [record["commit_info"] for record in result]
 
