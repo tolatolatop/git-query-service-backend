@@ -9,6 +9,7 @@ setup(
         "uvicorn",
         "pygit2",
         "neo4j",
+        "python-dotenv",
     ],
     extras_require={
         "test": [
