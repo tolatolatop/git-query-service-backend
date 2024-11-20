@@ -11,6 +11,8 @@ class GitOperations:
         # 创建临时目录
         self.temp_dir = tempfile.mkdtemp(prefix='git_query_')
         self.repo_path = Path(self.temp_dir) / 'repo'
+        # 获取 Git Token
+        self.git_token = os.getenv('GIT_TOKEN')
 
     def __del__(self):
         """清理临时目录"""
@@ -20,6 +22,14 @@ class GitOperations:
         except Exception:
             pass
 
+    def _create_callbacks(self) -> pygit2.RemoteCallbacks:
+        """创建带有认证信息的回调"""
+        if self.git_token:
+            # 使用token创建认证回调
+            credentials = pygit2.UserPass("git", self.git_token)
+            return pygit2.RemoteCallbacks(credentials=credentials)
+        return pygit2.RemoteCallbacks()
+
     def _clone_repository(self, remote_url: str) -> pygit2.Repository:
         """克隆仓库或使用现有仓库"""
         try:
@@ -28,7 +38,8 @@ class GitOperations:
             # 确保目录存在
             self.repo_path.parent.mkdir(parents=True, exist_ok=True)
             
-            callbacks = pygit2.RemoteCallbacks()
+            # 使用带认证的回调
+            callbacks = self._create_callbacks()
             return pygit2.clone_repository(
                 remote_url,
                 str(self.repo_path),
