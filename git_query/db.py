@@ -85,30 +85,28 @@ class GitDatabase:
         获取两个提交之间的所有提交
 
         :param repo_url: 仓库URL
-        :param start_commit_id: 起始提交ID
-        :param end_commit_id: 结束提交ID
-        :return: 提交信息列表
+        :param start_commit_id: 起始提交ID（较新的提交）
+        :param end_commit_id: 结束提交ID（较老的提交）
+        :return: 提交信息列表，按深度排序（从新到旧）
         """
         with self._driver.session() as session:
             result = session.run("""
-                MATCH (start:Commit {id: $start_id})-[*0..]->(c:Commit)
-                WHERE c.id <> $end_id
-                WITH COLLECT(c) as commits
-                MATCH (end:Commit {id: $end_id})
-                WITH commits + end as all_commits
-                UNWIND all_commits as commit
+                MATCH path = shortestPath((start:Commit {id: $start_id})-[:PARENT*]->(end:Commit {id: $end_id}))
+                WITH nodes(path) as commits
+                UNWIND range(0, size(commits)-1) as idx
+                WITH commits[idx] as commit, idx as depth
                 MATCH (commit)-[:BELONGS_TO]->(r:Repository {url: $repo_url})
                 OPTIONAL MATCH (commit)-[:PARENT]->(p:Commit)
-                WITH commit, COLLECT(p.id) as parents
+                WITH commit, depth, COLLECT(p.id) as parents
                 RETURN {
                     id: commit.id,
                     message: commit.message,
                     author: commit.author,
                     time: commit.time,
-                    depth: commit.depth,
+                    depth: depth,
                     parents: parents
                 } as commit_info
-                ORDER BY commit.depth
+                ORDER BY depth ASC
             """, start_id=start_commit_id, end_id=end_commit_id, repo_url=repo_url)
             
             return [record["commit_info"] for record in result]
