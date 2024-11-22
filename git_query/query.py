@@ -220,6 +220,24 @@ class GitQueryService:
         except Exception as e:
             raise ValueError(f"同步提交历史失败: {str(e)}")
 
+    def delete_repository(self, repo_url: str) -> Dict[str, Union[int, str]]:
+        """
+        删除仓库的所有信息
+
+        :param repo_url: 仓库URL
+        :return: 包含删除结果的字典
+        """
+        try:
+            deleted_count = self.db.delete_repository(repo_url)
+            return {
+                "deleted_commits": deleted_count,
+                "repository_url": repo_url,
+                "status": "success",
+                "message": f"成功删除仓库及其 {deleted_count} 个提交"
+            }
+        except Exception as e:
+            raise ValueError(f"删除仓库失败: {str(e)}")
+
     def __enter__(self):
         return self
 

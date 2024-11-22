@@ -44,6 +44,12 @@ class SyncHistoryResponse(BaseModel):
     total_synced: int
     message: str
 
+class DeleteRepositoryResponse(BaseModel):
+    deleted_commits: int
+    repository_url: str
+    status: str
+    message: str
+
 @app.get(
     "/commits/",
     response_model=List[CommitResponse],
@@ -165,6 +171,27 @@ async def sync_commit_history(request: SyncHistoryRequest):
                 "total_synced": total_synced,
                 "message": f"成功同步 {total_synced} 个提交"
             }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete(
+    "/repository",
+    response_model=DeleteRepositoryResponse,
+    responses={400: {"model": ErrorResponse}},
+    summary="删除仓库的所有信息"
+)
+async def delete_repository(repo_url: str):
+    """
+    从数据库中删除指定仓库的所有信息，包括所有提交记录
+
+    - **repo_url**: Git仓库的URL
+    """
+    try:
+        with GitQueryService() as query_service:
+            result = query_service.delete_repository(repo_url)
+            return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:

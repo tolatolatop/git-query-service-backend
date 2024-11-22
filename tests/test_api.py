@@ -334,3 +334,45 @@ def test_get_commit_by_invalid_id():
     
     assert response.status_code == 400
     assert "提交ID不存在" in response.json()["detail"]
+
+def test_delete_repository():
+    """测试删除仓库信息"""
+    # 首先添加一些提交数据
+    with GitQueryService() as query_service:
+        query_service.sync_commit_history(TEST_REPO, VALID_COMMIT)
+    
+    # 然后删除仓库
+    response = client.delete(
+        "/repository",
+        params={"repo_url": TEST_REPO}
+    )
+    
+    assert response.status_code == 200
+    result = response.json()
+    
+    # 验证响应格式
+    assert all(key in result for key in [
+        "deleted_commits",
+        "repository_url",
+        "status",
+        "message"
+    ])
+    assert result["repository_url"] == TEST_REPO
+    assert result["status"] == "success"
+    assert result["deleted_commits"] >= 0
+
+    # 验证仓库确实被删除了
+    with GitQueryService() as query_service:
+        commit = query_service.get_commit_by_id(TEST_REPO, VALID_COMMIT)
+        assert commit is None
+
+def test_delete_nonexistent_repository():
+    """测试删除不存在的仓库"""
+    response = client.delete(
+        "/repository",
+        params={"repo_url": "https://github.com/nonexistent/repo.git"}
+    )
+    
+    assert response.status_code == 200
+    result = response.json()
+    assert result["deleted_commits"] == 0

@@ -173,6 +173,30 @@ class GitDatabase:
             record = result.single()
             return record["commit_info"] if record else None
 
+    def delete_repository(self, repo_url: str) -> int:
+        """
+        删除仓库及其所有相关的提交信息
+
+        :param repo_url: 仓库URL
+        :return: 删除的节点数量
+        """
+        with self._driver.session() as session:
+            # 首先统计要删除的节点数量
+            count_result = session.run("""
+                MATCH (r:Repository {url: $repo_url})<-[:BELONGS_TO]-(c:Commit)
+                RETURN count(c) as commit_count
+            """, repo_url=repo_url)
+            commit_count = count_result.single()["commit_count"] if count_result.single() else 0
+
+            # 删除仓库及其所有相关的提交
+            result = session.run("""
+                MATCH (r:Repository {url: $repo_url})
+                OPTIONAL MATCH (r)<-[:BELONGS_TO]-(c:Commit)
+                DETACH DELETE c, r
+            """, repo_url=repo_url)
+            
+            return commit_count
+
     def __enter__(self):
         return self
 
