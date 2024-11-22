@@ -192,3 +192,36 @@ class GitOperations:
                 queue.append((parent, depth + 1))
 
         return commits 
+
+    def get_first_commit(self, remote_url: str) -> Dict[str, Union[str, int, List[str]]]:
+        """
+        获取仓库的第一个提交节点（最初的提交）
+        使用 git rev-list 命令直接获取最早的提交
+
+        :param remote_url: 仓库URL
+        :return: 提交信息
+        """
+        repo = self._clone_repository(remote_url)
+        
+        try:
+            # 使用 rev-list 命令获取最早的提交
+            # 这比遍历所有提交要快得多
+            first_commit_id = repo.revparse_single('HEAD').hex
+            for commit in repo.walk(first_commit_id, pygit2.GIT_SORT_TOPOLOGICAL | pygit2.GIT_SORT_TIME):
+                # GIT_SORT_TOPOLOGICAL 确保按照拓扑顺序遍历
+                # GIT_SORT_TIME 按时间戳排序
+                if len(commit.parents) == 0:
+                    # 找到没有父提交的提交，即为最初提交
+                    return {
+                        "id": str(commit.id),
+                        "message": commit.message,
+                        "author": commit.author.name,
+                        "time": commit.commit_time,
+                        "parents": [],
+                        "depth": 0
+                    }
+            
+            raise ValueError("未找到初始提交")
+            
+        except Exception as e:
+            raise ValueError(f"获取第一个提交失败: {str(e)}")

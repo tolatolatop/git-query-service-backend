@@ -279,3 +279,31 @@ def test_cors_actual_request():
     
     assert response.status_code == 200
     assert response.headers["access-control-allow-origin"] == "*"
+
+def test_get_first_commit():
+    """测试获取仓库的第一个提交"""
+    response = client.get(
+        "/commits/first",
+        params={"repo_url": TEST_REPO}
+    )
+    
+    assert response.status_code == 200
+    commit = response.json()
+    
+    # 验证返回的提交信息格式
+    assert all(key in commit for key in [
+        "id", "message", "author", "time", "parents", "depth"
+    ])
+    # 第一个提交没有父提交
+    assert commit["parents"] == []
+    # 深度应该为0
+    assert commit["depth"] == 0
+
+def test_get_first_commit_invalid_repo():
+    """测试获取无效仓库的第一个提交"""
+    response = client.get(
+        "/commits/first",
+        params={"repo_url": "https://github.com/nonexistent/repo.git"}
+    )
+    
+    assert response.status_code == 400

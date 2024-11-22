@@ -106,6 +106,25 @@ class GitQueryService:
                 max_depth
             )
 
+    def get_first_commit(self, repo_url: str) -> Dict[str, Union[str, int, List[str]]]:
+        """
+        获取仓库的第一个提交节点
+        优先从数据库查询，如果数据不存在则从git仓库获取并同步到数据库
+        """
+        try:
+            # 使用工厂创建git操作实例
+            git_ops = GitOperationsFactory.create(repo_url)
+            
+            # 获取第一个提交
+            commit = git_ops.get_first_commit(repo_url)
+            
+            # 同步到数据库
+            self.db.save_commits(repo_url, [commit])
+            return commit
+            
+        except Exception as e:
+            raise ValueError(f"获取第一个提交失败: {str(e)}")
+
     def __enter__(self):
         return self
 
