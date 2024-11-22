@@ -307,3 +307,30 @@ def test_get_first_commit_invalid_repo():
     )
     
     assert response.status_code == 400
+
+def test_get_commit_by_id():
+    """测试获取单个提交信息"""
+    response = client.get(
+        f"/commits/{VALID_COMMIT}",
+        params={"repo_url": TEST_REPO}
+    )
+    
+    assert response.status_code == 200
+    commit = response.json()
+    
+    # 验证返回的提交信息格式
+    assert all(key in commit for key in [
+        "id", "message", "author", "time", "parents", "depth"
+    ])
+    assert commit["id"] == VALID_COMMIT
+
+def test_get_commit_by_invalid_id():
+    """测试获取不存在的提交ID"""
+    invalid_commit = "0" * 40  # 40个0作为无效的commit id
+    response = client.get(
+        f"/commits/{invalid_commit}",
+        params={"repo_url": TEST_REPO}
+    )
+    
+    assert response.status_code == 400
+    assert "提交ID不存在" in response.json()["detail"]

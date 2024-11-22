@@ -2,6 +2,7 @@ from typing import List, Dict, Union, Optional
 from .db import GitDatabase
 from .factory import GitOperationsFactory
 import os
+import pygit2
 
 class GitQueryService:
     def __init__(self):
@@ -124,6 +125,47 @@ class GitQueryService:
             
         except Exception as e:
             raise ValueError(f"获取第一个提交失败: {str(e)}")
+
+    def get_commit_by_id(
+        self,
+        repo_url: str,
+        commit_id: str
+    ) -> Dict[str, Union[str, int, List[str]]]:
+        """
+        快速查询单个提交信息
+        优先从数据库查询，如果数据不存在则从git仓库获取并同步到数据库
+        """
+        try:
+            # 先尝试从数据库获取
+            commit = self.db.get_commit_by_id(repo_url, commit_id)
+            if commit:
+                return commit
+
+            # 数据库中不存在，从git获取
+            git_ops = GitOperationsFactory.create(repo_url)
+            repo = git_ops._clone_repository(repo_url)
+            
+            try:
+                commit_obj = repo.get(commit_id)
+                if commit_obj and commit_obj.type == pygit2.GIT_OBJ_COMMIT:
+                    commit = {
+                        "id": str(commit_obj.id),
+                        "message": commit_obj.message,
+                        "author": commit_obj.author.name,
+                        "time": commit_obj.commit_time,
+                        "parents": [str(parent.id) for parent in commit_obj.parents],
+                        "depth": 0  # 单个提交查询时深度设为0
+                    }
+                    # 同步到数据库
+                    self.db.save_commits(repo_url, [commit])
+                    return commit
+                else:
+                    raise ValueError(f"提交ID不存在或不是有效的提交: {commit_id}")
+            except KeyError:
+                raise ValueError(f"提交ID不存在: {commit_id}")
+                
+        except Exception as e:
+            raise ValueError(f"获取提交信息失败: {str(e)}")
 
     def __enter__(self):
         return self

@@ -1,5 +1,5 @@
 from neo4j import GraphDatabase
-from typing import List, Dict, Union
+from typing import List, Dict, Union, Optional
 import logging
 
 class GitDatabase:
@@ -146,6 +146,32 @@ class GitDatabase:
             )
             
             return [record["commit_info"] for record in result]
+
+    def get_commit_by_id(self, repo_url: str, commit_id: str) -> Optional[Dict]:
+        """
+        根据commit id快速查询单个提交信息
+
+        :param repo_url: 仓库URL
+        :param commit_id: 提交ID
+        :return: 提交信息，如果不存在则返回None
+        """
+        with self._driver.session() as session:
+            result = session.run("""
+                MATCH (c:Commit {id: $commit_id})-[:BELONGS_TO]->(r:Repository {url: $repo_url})
+                OPTIONAL MATCH (c)-[:PARENT]->(p:Commit)
+                WITH c, COLLECT(p.id) as parents
+                RETURN {
+                    id: c.id,
+                    message: c.message,
+                    author: c.author,
+                    time: c.time,
+                    depth: c.depth,
+                    parents: parents
+                } as commit_info
+            """, commit_id=commit_id, repo_url=repo_url)
+            
+            record = result.single()
+            return record["commit_info"] if record else None
 
     def __enter__(self):
         return self

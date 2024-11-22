@@ -106,5 +106,30 @@ async def get_first_commit(repo_url: str):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+@app.get(
+    "/commits/{commit_id}",
+    response_model=CommitResponse,
+    responses={400: {"model": ErrorResponse}},
+    summary="获取单个提交信息"
+)
+async def get_commit_by_id(
+    commit_id: str,
+    repo_url: str
+):
+    """
+    快速获取Git仓库中指定ID的提交信息
+
+    - **commit_id**: 提交ID
+    - **repo_url**: Git仓库的URL
+    """
+    try:
+        with GitQueryService() as query_service:
+            commit = query_service.get_commit_by_id(repo_url, commit_id)
+            return commit
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True) 
