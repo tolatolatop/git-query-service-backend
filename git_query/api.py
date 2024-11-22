@@ -35,6 +35,15 @@ class CommitDepthRequest(BaseModel):
     start_ref: str
     max_depth: int = -1
 
+class SyncHistoryRequest(BaseModel):
+    repo_url: str
+    commit_id: str
+    batch_size: int = 100
+
+class SyncHistoryResponse(BaseModel):
+    total_synced: int
+    message: str
+
 @app.get(
     "/commits/",
     response_model=List[CommitResponse],
@@ -126,6 +135,36 @@ async def get_commit_by_id(
         with GitQueryService() as query_service:
             commit = query_service.get_commit_by_id(repo_url, commit_id)
             return commit
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post(
+    "/commits/sync-history",
+    response_model=SyncHistoryResponse,
+    responses={400: {"model": ErrorResponse}},
+    summary="同步提交历史到数据库"
+)
+async def sync_commit_history(request: SyncHistoryRequest):
+    """
+    同步指定提交ID的上游历史到数据库
+
+    - **repo_url**: Git仓库的URL
+    - **commit_id**: 起始提交ID
+    - **batch_size**: 每批获取的提交数量（默认100）
+    """
+    try:
+        with GitQueryService() as query_service:
+            total_synced = query_service.sync_commit_history(
+                request.repo_url,
+                request.commit_id,
+                request.batch_size
+            )
+            return {
+                "total_synced": total_synced,
+                "message": f"成功同步 {total_synced} 个提交"
+            }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:

@@ -167,6 +167,59 @@ class GitQueryService:
         except Exception as e:
             raise ValueError(f"获取提交信息失败: {str(e)}")
 
+    def sync_commit_history(
+        self,
+        repo_url: str,
+        commit_id: str,
+        batch_size: int = 100
+    ) -> int:
+        """
+        同步指定提交ID的上游历史到数据库
+        采用分批获取和存储的方式，直到找到已存在的提交或到达仓库起始
+
+        :param repo_url: 仓库URL
+        :param commit_id: 起始提交ID
+        :param batch_size: 每批获取的提交数量
+        :return: 同步的提交总数
+        """
+        try:
+            git_ops = GitOperationsFactory.create(repo_url)
+            repo = git_ops._clone_repository(repo_url)
+            
+            total_synced = 0
+            current_commit_id = commit_id
+            
+            while True:
+                # 检查当前提交是否已存在于数据库
+                if self.db.get_commit_by_id(repo_url, current_commit_id):
+                    break
+                
+                # 获取一批提交
+                commits = git_ops.get_commit_batch_with_parents(
+                    repo,
+                    current_commit_id,
+                    batch_size
+                )
+                
+                if not commits:
+                    break
+                
+                # 保存到数据库
+                self.db.save_commits(repo_url, commits)
+                total_synced += len(commits)
+                
+                # 获取最后一个提交的父提交作为下一批的起点
+                last_commit = commits[-1]
+                if not last_commit["parents"]:
+                    break  # 到达仓库起始点
+                    
+                current_commit_id = last_commit["parents"][0]
+            
+            return total_synced
+            
+        except Exception as e:
+            raise ValueError(f"同步提交历史失败: {str(e)}")
+
     def __enter__(self):
         return self
 

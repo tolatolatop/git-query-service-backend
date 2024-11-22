@@ -225,3 +225,48 @@ class GitOperations:
             
         except Exception as e:
             raise ValueError(f"获取第一个提交失败: {str(e)}")
+
+    def get_commit_batch_with_parents(
+        self,
+        repo: pygit2.Repository,
+        start_commit_id: str,
+        batch_size: int = 100
+    ) -> List[Dict[str, Union[str, int, List[str]]]]:
+        """
+        获取指定提交及其上游的一批提交
+
+        :param repo: Git仓库对象
+        :param start_commit_id: 起始提交ID
+        :param batch_size: 批次大小
+        :return: 提交信息列表
+        """
+        try:
+            commits = []
+            visited = set()
+            queue = [(repo.get(start_commit_id), 0)]  # (commit, depth)
+            
+            while queue and len(commits) < batch_size:
+                commit, depth = queue.pop(0)
+                if commit.id in visited:
+                    continue
+                    
+                visited.add(commit.id)
+                commits.append({
+                    "id": str(commit.id),
+                    "message": commit.message,
+                    "author": commit.author.name,
+                    "time": commit.commit_time,
+                    "parents": [str(parent.id) for parent in commit.parents],
+                    "depth": depth
+                })
+                
+                # 将父提交添加到队列
+                for parent in commit.parents:
+                    queue.append((parent, depth + 1))
+                    
+            return commits
+            
+        except KeyError as e:
+            raise ValueError(f"无效的提交ID: {start_commit_id}")
+        except Exception as e:
+            raise ValueError(f"获取提交批次失败: {str(e)}")
